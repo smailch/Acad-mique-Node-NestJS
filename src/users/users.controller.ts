@@ -1,84 +1,79 @@
-import { Controller, Get, Param, Post, Body, Query, Headers, Put, Delete, ParseIntPipe, NotFoundException } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Param,
+  Body,
+  NotFoundException,
+} from '@nestjs/common';
+import { UsersService } from './users.service'; // 📦 Import du service
 import { CreateUserDto } from './dto/create-user.dto/create-user.dto';
+
+// 🎯 Controller pour gérer les endpoints liés aux utilisateurs
 @Controller('users')
 export class UsersController {
-  private nbID: number = 4;
-  private users = [
-    { id: 1, username: 'Smail', email: 'chemlali@esprit.tn', status: 'active' },
-    { id: 2, username: 'Sarra', email: 'sarra@esprit.tn', status: 'inactive' },
-    { id: 3, username: 'Ali', email: 'ali@esprit.tn', status: 'inactive' },
-    { id: 4, username: 'Eya', email: 'eya@esprit.tn', status: 'active' },
-  ];
+  // 🔑 Injection du service via le constructeur
+  constructor(private readonly usersService: UsersService) {}
 
-  // 1. GET /users?status=active
-  @Get()
-  getAllUsers(@Query('status') status?: string) {
-    if (status) {
-      return this.users.filter(user => user.status === status);
-    }
-    return this.users;
+  // 📥 ENDPOINT 1 : POST /users - Créer un utilisateur
+  @Post()
+  async createUser(@Body() createUserDto: CreateUserDto) {
+    const { email, password } = createUserDto;
+    return await this.usersService.create(email, password);
   }
 
-  // 2. GET /users/:id
-  @Get(':id')
-  getUserById(@Param('id', ParseIntPipe) id: number) {
-    const user = this.users.find(user => user.id === id);
+  // 🔓 ENDPOINT 2 : PUT /users/activate - Activer un compte avec vérification password
+  @Put('activate')
+  async activateUser(
+    @Body() body: { email: string; password: string },
+  ) {
+    const user = await this.usersService.activateAccount(
+      body.email,
+      body.password,
+    );
+
     if (!user) {
-      throw new NotFoundException(`User with id ${id} not found`);
+      throw new NotFoundException(
+        'User not found or password incorrect',
+      );
     }
+
+    return {
+      message: 'Account activated successfully',
+      user,
+    };
+  }
+
+  // ✅ ENDPOINT 3 : GET /users/active - Obtenir tous les utilisateurs actifs
+  // ⚠️ IMPORTANT : Doit être AVANT /users/:id sinon "active" sera traité comme un ID
+  @Get('active')
+  async getActiveUsers() {
+    return await this.usersService.findActive();
+  }
+
+  // 📧 ENDPOINT 4 : GET /users/email/:email - Obtenir un utilisateur par email
+  @Get('email/:email')
+  async getUserByEmail(@Param('email') email: string) {
+    const user = await this.usersService.findOneByEmail(email);
+
+    if (!user) {
+      throw new NotFoundException(`User with email ${email} not found`);
+    }
+
     return user;
   }
 
-  // 3. POST /users + header Authorization
- @Post()
-addUser(
-  @Body() data: CreateUserDto,
-  @Headers('Authorization') auth: string,
-) {
-  this.nbID++;
-  const newUser = {
-    id: this.nbID,
-    username: data.username,
-    email: data.email,
-    status: data.status ?? 'active',
-  };
-  this.users.push(newUser);
-  console.log('Authorization:', auth);
-  return newUser;
-}
+  // 🔍 ENDPOINT 5 : GET /users/:id - Obtenir un utilisateur par ID
+  // ⚠️ Doit être EN DERNIER car :id capture tout
+  @Get(':id')
+  async getUserById(@Param('id') id: string) {
+    const user = await this.usersService.findOneById(id);
 
-@Put(':id')
-updateUser(
-  @Param('id', ParseIntPipe) id: number,
-  @Body() data: CreateUserDto,
-) {
-  const user = this.users.find(user => user.id === id);
-  if (!user) {
-    throw new NotFoundException(`User with id ${id} not found`);
-  }
-  user.username = data.username ?? user.username;
-  user.email = data.email ?? user.email;
-  user.status = data.status ?? user.status;
-  return user;
-}
-
-  // 5. DELETE /users/:id
-  @Delete(':id')
-  deleteUser(@Param('id', ParseIntPipe) id: number) {
-    const index = this.users.findIndex(user => user.id === id);
-    if (index === -1) {
+    if (!user) {
       throw new NotFoundException(`User with id ${id} not found`);
     }
-    this.users.splice(index, 1);
-    return { message: `User ${id} deleted` };
-  }
 
-  // 6. GET /users/active/:status → seulement si status = 'active'
-  @Get('active/:status')
-  getActiveUsers(@Param('status') status: string) {
-    if (status !== 'active') {
-      return { message: 'Use /users/active/active to see active users' };
-    }
-    return this.users.filter(user => user.status === 'active');
+    return user;
   }
 }
